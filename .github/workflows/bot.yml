@@ -1,0 +1,60 @@
+name: Gold Deal Bot
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 lxml
+
+      - name: Run scraper
+        env:
+          WEBHOOK: ${{ secrets.WEBHOOK }}
+        run: |
+          python - << 'EOF'
+import requests, re
+from bs4 import BeautifulSoup
+
+URLS = [
+    "https://www.pawnamerica.com/search?q=gold",
+    "https://www.unclaimedbaggage.com/search?q=gold"
+]
+
+KEYWORDS = ["14k","18k","22k","24k","diamond"]
+
+def send(msg):
+    webhook = __import__("os").environ.get("WEBHOOK")
+    if webhook:
+        requests.post(webhook, json={"content": msg})
+
+def scan(url):
+    r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
+    soup = BeautifulSoup(r.text, "lxml")
+
+    for item in soup.find_all("a"):
+        text = item.get_text(" ", strip=True).lower()
+        if any(k in text for k in KEYWORDS):
+            price = re.search(r"\$(\d+)", text)
+            if price:
+                p = int(price.group(1))
+                if p < 200:  # simple “cheap filter”
+                    send(f"🔥 GOLD DEAL: {text[:200]}")
+
+for u in URLS:
+    scan(u)
+EOF

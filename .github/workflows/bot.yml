@@ -1,4 +1,4 @@
-name: Gold Deal Bot
+name: Gold Deal Bot (No External Setup)
 
 on:
   schedule:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup Python
@@ -19,15 +19,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 lxml
+        run: pip install requests beautifulsoup4 lxml
 
-      - name: Run scraper
-        env:
-          WEBHOOK: ${{ secrets.WEBHOOK }}
+      - name: Run bot
         run: |
           python - << 'EOF'
-import requests, re
+import requests
+import re
 from bs4 import BeautifulSoup
 
 URLS = [
@@ -37,23 +35,28 @@ URLS = [
 
 KEYWORDS = ["14k","18k","22k","24k","diamond"]
 
-def send(msg):
-    webhook = __import__("os").environ.get("WEBHOOK")
-    if webhook:
-        requests.post(webhook, json={"content": msg})
-
 def scan(url):
+    print(f"\n🔍 Scanning: {url}")
     r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
     soup = BeautifulSoup(r.text, "lxml")
 
-    for item in soup.find_all("a"):
-        text = item.get_text(" ", strip=True).lower()
+    found = 0
+
+    for a in soup.find_all("a"):
+        text = a.get_text(" ", strip=True).lower()
+
         if any(k in text for k in KEYWORDS):
             price = re.search(r"\$(\d+)", text)
-            if price:
-                p = int(price.group(1))
-                if p < 200:  # simple “cheap filter”
-                    send(f"🔥 GOLD DEAL: {text[:200]}")
+            price_val = int(price.group(1)) if price else None
+
+            if price_val and price_val < 200:
+                print("🔥 DEAL FOUND:")
+                print(text[:300])
+                print("-" * 40)
+                found += 1
+
+    if found == 0:
+        print("No deals found this run.")
 
 for u in URLS:
     scan(u)

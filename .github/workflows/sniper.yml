@@ -1,0 +1,77 @@
+name: Gold Sniper V3
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - run: pip install requests beautifulsoup4 lxml
+
+      - name: Run sniper engine
+        run: |
+          python - << 'EOF'
+import requests
+import re
+from bs4 import BeautifulSoup
+
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+SOURCES = [
+    "https://www.ebay.com/sch/i.html?_nkw=14k+gold+ring",
+    "https://www.ebay.com/sch/i.html?_nkw=18k+gold+necklace",
+    "https://www.ebay.com/sch/i.html?_nkw=gold+diamond+jewelry"
+]
+
+KEYWORDS = ["14k","18k","22k","24k","diamond"]
+
+def estimate_score(text, price):
+    score = 50
+
+    if "diamond" in text:
+        score += 15
+    if "18k" in text or "24k" in text:
+        score += 20
+    if price < 200:
+        score += 15
+    if price < 100:
+        score += 20
+
+    return min(score, 100)
+
+def scan(url):
+    print(f"\n🔍 Scanning: {url}")
+
+    r = requests.get(url, headers=HEADERS)
+    soup = BeautifulSoup(r.text, "lxml")
+
+    items = soup.find_all("a")
+
+    for i in items:
+        text = i.get_text(" ", strip=True).lower()
+
+        if any(k in text for k in KEYWORDS):
+            price = re.search(r"\$(\d+)", text)
+            price_val = int(price.group(1)) if price else 999
+
+            score = estimate_score(text, price_val)
+
+            if score >= 70:
+                print("\n🔥 DEAL SCORE:", score)
+                print("Item:", text[:250])
+                print("Price:", price_val)
+                print("-" * 40)
+
+for s in SOURCES:
+    scan(s)
+EOF
